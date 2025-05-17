@@ -1,0 +1,21 @@
+bq_default_project:
+  bigquery_source_project: my-project-sheet-integration 
+
+bq_tables:
+  citibike_stations:
+    project: bigquery-public-data
+    dataset: new_york_citibike
+    table: citibike_stations
+  citibike_trips:
+    project: bigquery-public-data
+    dataset: new_york_citibike
+    table: citibike_trips
+
+database:
+  host: postgres_db
+  port: 5432
+  db_name: postgres_test_data
+
+google_drive:
+  parent_folder: Python
+  upload_path: Python/Uploaded files

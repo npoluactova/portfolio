@@ -1,56 +1,68 @@
-import logging
+import os
 import json
 from typing import List
-import datetime
-import requests
 
-from google.cloud import bigquery
 from google.oauth2 import service_account
 from googleapiclient import discovery
+from googleapiclient.http import MediaFileUpload
 
-import pandas as pd
-import numpy as np
 
 class GoogleDriveandSpreadsheets:
     
     def __init__(self):
         self.sheet_service = self.get_client('sheets', 'v4')
         self.drive_service = self.get_client('drive', 'v3')
-
-    # build client for drive integration and for sheet integration
-    # service_name = drive, service_version = v3 - for google drive
-    # service_name = sheets, service_version = v4 - for google spreadsheets
+    '''
+    build client for drive integration and for sheet integration
+    service_name = drive, service_version = v3 - for google drive
+    service_name = sheets, service_version = v4 - for google spreadsheets
+    '''
     def get_client(self, service_name: str, service_version: str) -> discovery.build:
-        credentials_info = 'my-project-sheet-integration-5e66b5395e0a.json' # тут нужно передать путь к переменной в вольте?
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        credentials_info = os.path.join(current_dir, "bq_creds.json")  # service account creds
         service_account_info = json.load(open(credentials_info))
         scopes_arr=['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         google_credentials = service_account.Credentials.from_service_account_info(service_account_info, scopes = scopes_arr)
         result = discovery.build(service_name, service_version, credentials = google_credentials)
         return result
-    
-    # function for logging if .py file will be executed - test when it will work as app
-    def get_Logger(self, name:str, log_level:str = "INFO"):
-        logging.basicConfig()
-        logger = logging.getLogger(name)
-        logger.setLevel(log_level.upper())
-        return logger
 
-
-    # get list of available files in google drive for this acc
+    '''
+    get list of available files in google drive for this acc = only files (not folders)
+    '''
     def get_drive_file_list(self) -> list: 
-        file_list = self.drive_service.files().list().execute()['files']
-        return file_list
-        #name, id - necessary keys
+        #file_list = self.drive_service.files().list().execute()['files']
+        response = self.drive_service.files().list(
+            q="not mimeType='application/vnd.google-apps.folder'",
+            fields="files(id, name, mimeType)",
+            pageSize=1000,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True
+        ).execute()
+        return response.get("files", [])
+
+    '''
+    get list of available folders in google drive for this acc
+    '''
+    def get_drive_folder_list(self) -> list:
+        # file_list = self.drive_service.files().list().execute()['files']
+        response = self.drive_service.files().list(
+            q="mimeType='application/vnd.google-apps.folder'",
+            fields="files(id, name, mimeType)",
+            pageSize=1000,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True
+        ).execute()
+        return response.get("files", [])
         
-        
-    # get list of worksheets from spreadsheet
+    '''
+    get list of worksheets from spreadsheet
+    '''
     def get_worksheets_list_in_spreadsheet(self, spreadsheet_id: str) -> list: 
         worksheets_list = self.sheet_service.spreadsheets().get(spreadsheetId = spreadsheet_id).execute()['sheets']
         title_list = []
         for sheet in worksheets_list:
             title_list.append(sheet['properties']['title'])
         return title_list
-        
     
     """
     create new worksheet in spreadsheet = spreadsheet_id, 
@@ -176,3 +188,71 @@ class GoogleDriveandSpreadsheets:
                     }
                 }
                 self.sheet_service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+
+    '''
+    Get folder id for defined path to folder on google drive, knowing parent folder name
+    '''
+    def get_folder_id_in_path(self, parent_folder_name:str, folder_path:str):
+        # folder_id = 'root'  # start from google drive's root folder
+        parent_folder_id = None
+        for folder in self.get_drive_folder_list():
+            if folder['name'] == parent_folder_name:
+                parent_folder_id = folder['id']
+        if parent_folder_id is None:
+            raise Exception(f'no folder {parent_folder_name} in drive')
+
+        folder_id = None
+        for folder in folder_path.split('/'):
+            if folder != parent_folder_name:
+                response = self.drive_service.files().list(
+                    fields="files(id, name)",
+                    q=f"'{parent_folder_id}' in parents and name = '{folder}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                ).execute()
+                folders = response.get("files", [])
+                if not folders:
+                    return None  # if no folder was found
+                folder_id = folders[0]["id"]
+        return folder_id #return folder_id for last folder_name in path
+
+    '''
+    Get file id in folder_id
+    '''
+    def get_file_id_in_folder(self, folder_id:str, file_name:str):
+        response = self.drive_service.files().list(
+            q=f"'{folder_id}' in parents and name = '{file_name}' and mimeType != 'application/vnd.google-apps.folder' and trashed = false",
+            fields="files(id, name)"
+        ).execute()
+        files = response.get("files", [])
+        if not files:
+            return None
+        return files[0]["id"]
+
+    '''
+    Upload file to google drive
+    file_path - path to file to be uploaded
+    folder_id - id of folder on Google Drive
+    returns uploaded file_id
+    '''
+
+    def upload_file(self, file_path: str, folder_id: str):
+        file_name = file_path.split("/")[-1]  # get file name as last name in file path
+        # check if file with this name already exists on google drive
+        file_id = self.get_file_id_in_folder(folder_id, file_name)
+        media = MediaFileUpload(file_path, resumable=True)  # prepare file to upload
+        if file_id: # update file if file already existed
+            updated_file = self.drive_service.files().update(
+                fileId=file_id,
+                media_body=media
+            ).execute()
+            return updated_file["id"]
+        # if file does not exist - upload new file and get file id
+        file_metadata = {
+            "name": file_name,
+            "parents": [folder_id]
+        }
+        new_file = self.drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id"
+        ).execute()
+        return new_file["id"]
