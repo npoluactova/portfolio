@@ -17,7 +17,7 @@ Folders structure:
 ---
 
 `Tasks` - examples of Python scripts with different ETL projects.
-- `city_bikes_data`: ETL project to extract data from BQ, transform via Pandas and upload result csv files to Google Drive.
+- `city_bikes_data`: ETL project to extract data from BQ, transform via Pandas and upload result csv files to Google Drive. Methods to integrate with Google Drive are implemented in custom class.
 
 ---
 
