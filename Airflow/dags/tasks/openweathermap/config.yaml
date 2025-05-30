@@ -1,0 +1,15 @@
+database:
+  host: postgres_db
+  port: 5432
+  db_name: postgres_test_data
+city_list:
+  - city: Berlin
+    country: DE
+  - city: Almaty
+    country: KZ
+  - city: Astana
+    country: KZ
+  - city: Tokyo
+    country: JP
+  - city: Munich
+    country: DE
