@@ -227,26 +227,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-'''    API_KEY = 'f5a6af54df5e1a14d18c2f670adcec3f'
-
-    city_list = [{'city': 'Berlin', 'country':'DE'},
-                 {'city': 'Almaty', 'country':'KZ'},
-                 {'city': 'Astana', 'country':'KZ'},
-                 {'city': 'Tokyo', 'country':'JP'},
-                 {'city': 'Munich', 'country':'DE'}]
-    print(f'Requested cities:')
-    [print(f"{city['city']}, {city['country']}") for city in city_list]
-
-    city_data_geo = get_geo_coordinates_by_name(api_key=API_KEY,
-                                                city_list=city_list)
-    print(f'Successfully got geo coordinates for city list')
-
-
-    weather_data = get_weather_data(api_key=API_KEY,
-                                    city_df=city_data_geo)
-    print(f'Successfully got weather data for city list')
-
-    weather_data.to_csv('weather.csv', index=False)
-    print(f'Successfully saved weather data to csv')
-
-    write_spotify_data_to_postgres(api_key, engine, city_list)'''
