@@ -1,0 +1,10 @@
+database:
+  host: postgres_db
+  port: 5432
+  db_name: postgres_test_data
+  scheme: spotify
+  table_name: artists
+
+kafka:
+  bootstrap_server: "kafka:9092"
+  produce_topic: spotify_data
